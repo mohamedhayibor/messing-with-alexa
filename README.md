@@ -2,9 +2,6 @@
 Potential extra features:
 
 
-1. To get the user's address:
-
-[https://github.com/un33k/node-ipware/issues](https://github.com/un33k/node-ipware/issues)
 
 # current set up for now
 
@@ -37,7 +34,7 @@ Potential extra features:
 > See listOfStations
 
 ### Sample Utterances:
-
+```
 WhatStation what station is available
 WhatStation what is my favorite station
 WhatStation what's my station
@@ -55,3 +52,12 @@ WhatStation yup
 WhatStation sure
 WhatStation yes please
 WhatStation my favorite color is {Station}
+```
+
+# To mess with later
+
+1. To get the user's address:
+
+[https://github.com/un33k/node-ipware/issues](https://github.com/un33k/node-ipware/issues)
+
+.....

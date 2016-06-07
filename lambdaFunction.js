@@ -1,30 +1,9 @@
-/**
- * This sample demonstrates a simple skill built with the Amazon Alexa Skills Kit.
- * The Intent Schema, Custom Slots, and Sample Utterances for this skill, as well as
- * testing instructions are located at http://amzn.to/1LzFrj6
- *
- * For additional samples, visit the Alexa Skills Kit Getting Started guide at
- * http://amzn.to/1LGWsLG
- */
-
-// Route the incoming request based on type (LaunchRequest, IntentRequest,
-// etc.) The JSON body of the request is provided in the event parameter.
-
-// handler takes in event and context
+var http = require('http');
+var https = require('https');
 
 exports.handler = function (event, context) {
     try {
         console.log("event.session.application.applicationId=" + event.session.application.applicationId);
-
-        /**
-         * Uncomment this if statement and populate with your skill's application ID to
-         * prevent someone else from configuring a skill that sends requests to this function.
-         */
-        /*
-        if (event.session.application.applicationId !== "amzn1.echo-sdk-ams.app.[unique-value-here]") {
-             context.fail("Invalid Application ID");
-        }
-        */
 
         if (event.session.new) {
             onSessionStarted({requestId: event.request.requestId}, event.session);
@@ -50,6 +29,78 @@ exports.handler = function (event, context) {
         context.fail("Exception: " + e);
     }
 };
+
+function getClosest(userLoc, intent, callback){
+    var closest = null;
+    var req = http.get('http://api.citybik.es/citi-bike-nyc.json', function(response) {
+    response.setEncoding('utf-8');
+    // Continuously update stream with data
+    var body = '';
+    response.on('data', function(d) {
+      body += d.toString();
+    });
+    response.on('end', function() {
+      // Data reception is done, do whatever with it!
+      var parsed = JSON.parse(body);
+      speechOutput = parsed;
+      handleBikeResponse(parsed, userLoc, intent, callback);
+    });
+  });
+}
+
+function handleBikeResponse(bikeData, userLoc, intent, callback){
+    var speechOutput = "I'm sorry I can't find a station near you";
+    var closest = null;
+    for (var i = 0; i < bikeData.length; i++) {
+        try {
+            var numBikes = bikeData[i]['bikes'];
+            var lat = bikeData[i]['lat'];
+            var lon = bikeData[i]['lng'];
+            var name = bikeData[i]['name'];
+            var nameClean = name.replace(/\d+\s-\s/, "");
+            var dist = getDist(userLoc, lat, lon);
+            if ((closest ===null || dist <closest.dist) && numBikes > 0)
+            {
+                closest = { numBikes:numBikes, name:nameClean,dist:dist};
+            }
+        }
+        catch (e) {
+
+        }
+    }
+    console.log(closest);
+    if (closest !== null) {
+        speechOutput = "The nearest station with available bikes is " + closest.name + " which has " + closest.numBikes + " bikes and is " +  (Math.round( closest.dist * 10 ) / 10) + " miles away";
+    }
+    callback({},
+         buildSpeechletResponse(intent.name, speechOutput, null, true));
+}
+
+function getDist(userLoc, lat, lon) {
+    var earth_radius = 6371;
+    var userLat = userLoc[0] / Math.pow(10,6);
+    var userLon = userLoc[1] / Math.pow(10,6);
+    var stationLat = lat / Math.pow(10, 6);
+    var stationLon = lon /Math.pow(10, 6);
+    var pi =3.14159265359;
+
+    var x1 = earth_radius*Math.cos(userLat*pi/180)*Math.cos(userLon*pi/180);
+    var y1 = earth_radius*Math.cos(userLat*pi/180)*Math.sin(userLon*pi/180);
+    var z1 = earth_radius*Math.sin(userLat*pi/180);
+
+    var x2 = earth_radius*Math.cos(stationLat*pi/180)*Math.cos(stationLon*pi/180);
+    var y2 = earth_radius*Math.cos(stationLat*pi/180)*Math.sin(stationLon*pi/180);
+    var z2 = earth_radius*Math.sin(stationLat*pi/180);
+
+    var xDif = x2-x1;
+    var yDif = y2-y1;
+    var zDif = z2-z1;
+
+    var d = Math.sqrt(xDif*xDif + yDif*yDif + zDif*zDif);
+    var dInMiles = d*0.621371;
+
+    return dInMiles;
+}
 
 /**
  * Called when the session starts.
@@ -81,17 +132,52 @@ function onIntent(intentRequest, session, callback) {
         intentName = intentRequest.intent.name;
 
     // Dispatch to your skill's intent handlers
-    if ("MyColorIsIntent" === intentName) {
-        setColorInSession(intent, session, callback);
-    } else if ("WhatsMyColorIntent" === intentName) {
-        getColorFromSession(intent, session, callback);
+    if ("GetStationsIntent" === intentName) {
+        setStationInSession(intent, session, callback);
     } else if ("AMAZON.HelpIntent" === intentName) {
         getWelcomeResponse(callback);
     } else if ("AMAZON.StopIntent" === intentName || "AMAZON.CancelIntent" === intentName) {
         handleSessionEndRequest(callback);
-    } else {
-        throw "Invalid intent";
+    } else if ("GetStation" === intentName)
+    {
+        getStation(intent, session, callback);
     }
+}
+
+
+function getStation(intent, session, callback) {
+    var speechOutput = "I could not find any stations near you, sorry";
+    var address = intent.value;
+    console.log("address:" + address);
+    var req = https.get('https://maps.googleapis.com/maps/api/geocode/json?address=' + address,
+    function(response){
+        response.setEncoding('utf-8');
+        // Continuously update stream with data
+        var body = '';
+        response.on('data', function(d) {
+          body += d.toString();
+        });
+        response.on('end', function() {
+          // Data reception is done, do whatever with it!
+          var parsed = JSON.parse(body);
+          var firstResult = parsed["results"][0];
+          var geometry = null;
+          var lat = null;
+          var lon = null;
+          if (firstResult) {
+              geometry = firstResult["geometry"];
+              var location = geometry["location"];
+              lat = location["lat"];
+              lon = location["lng"];
+          }
+          console.log(parsed);
+          console.log(geometry);
+          console.log("lat: " + lat);
+          console.log("lon: " + lon);
+          var userLoc = [lat*Math.pow(10,6), lon*Math.pow(10,6)];
+          getClosest(userLoc, intent, callback);
+        });
+    });
 }
 
 /**
@@ -101,21 +187,17 @@ function onIntent(intentRequest, session, callback) {
 function onSessionEnded(sessionEndedRequest, session) {
     console.log("onSessionEnded requestId=" + sessionEndedRequest.requestId +
         ", sessionId=" + session.sessionId);
-    // Add cleanup logic here
 }
-
-// --------------- Functions that control the skill's behavior -----------------------
 
 function getWelcomeResponse(callback) {
     // If we wanted to initialize the session to have some attributes we could add those here.
     var sessionAttributes = {};
     var cardTitle = "Welcome";
-    var speechOutput = "Welcome to the Alexa Skills Kit sample. " +
-        "Please tell me your favorite color by saying, my favorite color is red";
+    var speechOutput = "Welcome to the Awesome Bike Share " +
+        "Please tell me your station, so that I can provide you with number of available bikes and docks.";
     // If the user either does not reply to the welcome message or says something that is not
     // understood, they will be prompted again with this text.
-    var repromptText = "Please tell me your favorite color by saying, " +
-        "my favorite color is red";
+    var repromptText = "Please tell me your station, I didn't get your previous request";
     var shouldEndSession = false;
 
     callback(sessionAttributes,
@@ -131,58 +213,30 @@ function handleSessionEndRequest(callback) {
     callback({}, buildSpeechletResponse(cardTitle, speechOutput, null, shouldEndSession));
 }
 
-/**
- * Sets the color in the session and prepares the speech to reply to the user.
- ---------------
- Set<station>InSession
- */
-function setColorInSession(intent, session, callback) {
-    var cardTitle = intent.name;
-    var favoriteColorSlot = intent.slots.Color;
-    var repromptText = "";
-    var sessionAttributes = {};
-    var shouldEndSession = false;
-    var speechOutput = "";
-
-    if (favoriteColorSlot) {
-        var favoriteColor = favoriteColorSlot.value;
-        sessionAttributes = createFavoriteColorAttributes(favoriteColor);
-        speechOutput = "I now know your favorite color is " + favoriteColor + ". You can ask me " +
-            "your favorite color by saying, what's my favorite color?";
-        repromptText = "You can ask me your favorite color by saying, what's my favorite color?";
-    } else {
-        speechOutput = "I'm not sure what your favorite color is. Please try again";
-        repromptText = "I'm not sure what your favorite color is. You can tell me your " +
-            "favorite color by saying, my favorite color is red";
-    }
-
-    callback(sessionAttributes,
-         buildSpeechletResponse(cardTitle, speechOutput, repromptText, shouldEndSession));
-}
-
-function createFavoriteColorAttributes(favoriteColor) {
+// refactor getFavAttr to getStationsAttr
+function createStationAttributes(station) {
     return {
-        favoriteColor: favoriteColor
+        station: station
     };
 }
 
-function getColorFromSession(intent, session, callback) {
-    var favoriteColor;
+function getStationFromSession(intent, session, callback) {
+    /// refactor code for closest station (swap favoriteColor)
+    var station;
     var repromptText = null;
     var sessionAttributes = {};
     var shouldEndSession = false;
     var speechOutput = "";
 
     if (session.attributes) {
-        favoriteColor = session.attributes.favoriteColor;
+        station = session.attributes.station;
     }
 
-    if (favoriteColor) {
-        speechOutput = "Your favorite color is " + favoriteColor + ". Goodbye.";
+    if ( station ) {
+        speechOutput = "Your station is " + station + ". Have a safe ride.";
         shouldEndSession = true;
     } else {
-        speechOutput = "I'm not sure what your favorite color is, you can say, my favorite color " +
-            " is red";
+        speechOutput = "I didn't get that quiet well, can you tell me the station again?";
     }
 
     // Setting repromptText to null signifies that we do not want to reprompt the user.
@@ -193,7 +247,6 @@ function getColorFromSession(intent, session, callback) {
 }
 
 // --------------- Helpers that build all of the responses -----------------------
-
 function buildSpeechletResponse(title, output, repromptText, shouldEndSession) {
     return {
         outputSpeech: {
@@ -222,12 +275,3 @@ function buildResponse(sessionAttributes, speechletResponse) {
         response: speechletResponse
     };
 }
-/*
-* Notes on code
-* Global function helpers (hoisted on top):
-*   - buildResponse, buildSpeechletResponse, getColorFromSession, createFavoriteColorAttributes
-*   -
-*
-* The mega function being exported: built on top of
-*
-*/

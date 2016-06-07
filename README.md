@@ -1,32 +1,22 @@
+## Alexa skill
 
-Potential extra features:
-
-
-
-# current set up for now
+Gets Alexa to determine the closest bike station's name, number of available bikes and docks. 
 
 ### Intent Schema
 ```json
 {
   "intents": [
     {
-      "intent": "GetStationsIntent",
-      "slots": [
-        {
-          "name": "Stations",
-          "type": "LIST_OF_STATIONS"
-        }
-      ]
-    },
+    "intent": "GetStation",
+    "slots": [
     {
-      "intent": "WhatStation"
-    },
-    {
-      "intent": "AMAZON.HelpIntent"
+    	"name": "Address",
+    	"type": "ADDRESS"
+    }
+  		]
     }
   ]
 }
-
 ```
 
 ### Custom Slot Types
@@ -35,29 +25,7 @@ Potential extra features:
 
 ### Sample Utterances:
 ```
-WhatStation what station is available
-WhatStation what is my favorite station
-WhatStation what's my station
-WhatStation what is my station
-WhatStation my station
-WhatStation my favorite station
-WhatStation get my station
-WhatStation get my favorite station
-WhatStation give me my favorite station
-WhatStation give me my station
-WhatStation what my station is
-WhatStation what my favorite station is
-WhatStation yes
-WhatStation yup
-WhatStation sure
-WhatStation yes please
-WhatStation my favorite color is {Station}
+GetStation get bikes {Address}
+GetStation get bikes for {Address}
+GetStation bikes {Address}
 ```
-
-# To mess with later
-
-1. To get the user's address:
-
-[https://github.com/un33k/node-ipware/issues](https://github.com/un33k/node-ipware/issues)
-
-.....
